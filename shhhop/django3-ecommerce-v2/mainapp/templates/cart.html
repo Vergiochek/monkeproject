@@ -33,9 +33,7 @@
           <td>
             <form action="{% url 'change_qty' slug=item.product.slug %}" method="POST">
               {% csrf_token %}
-              <input type="number" class="form-control" name="qty" style="width: 70px;" min="1" value="{{ item.qty }}">
-              <br>
-              <input type="submit" class="btn btn-primary" value="Изменить кол-во">
+              <input type="number" class="form-control" name="qty" onchange="this.form.submit()" style="width: 70px;" min="1" value="{{ item.qty }}">
             </form>
           </td>
             <td>{{ item.final_price }} руб.</td>
@@ -55,3 +53,11 @@
 </table>
 {% endif %}
 {% endblock content %}
+{% block js %}
+<script>
+  function onQtyChange(event){
+    console.log(event.target.value)
+   }
+</script>
+
+{% endblock js %}
