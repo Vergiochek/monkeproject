@@ -1,7 +1,8 @@
 import operator
-
+import concurrent.futures
 from functools import reduce
 from itertools import chain
+from asgiref.sync import sync_to_async
 
 from django.db import transaction
 from django.db.models import Q
@@ -25,10 +26,18 @@ class MyQ(Q):
 
 
 class BaseView(CartMixin, View):
-
     def get(self, request, *args, **kwargs):
-        categories = Category.objects.all()
-        products = Product.objects.all()
+
+        categories = None
+        products = None
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            cat_future = executor.submit(Category.objects.all)
+            prod_future = executor.submit(Product.objects.all)
+
+            categories = cat_future.result()
+            products = prod_future.result()
+
         context = {
             'categories': categories,
             'products': products,
@@ -96,14 +105,27 @@ class AddToCartView(CartMixin, View):
 
     def get(self, request, *args, **kwargs):
         product_slug = kwargs.get('slug')
-        product = Product.objects.get(slug=product_slug)
-        cart_product, created = CartProduct.objects.get_or_create(
-            user=self.cart.owner, cart=self.cart, product=product
-        )
+
+        product, cart_product, created = None, None, None
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            product_future = executor.submit(Product.objects.get, slug=product_slug)
+            prod_info = executor.submit(CartProduct.objects.get_or_create, user=self.cart.owner, cart=self.cart, product=product)
+
+            product = product_future.result()
+            cart_product, created = prod_info.result()
+
+        # product = Product.objects.get(slug=product_slug)
+        # cart_product, created = CartProduct.objects.get_or_create(
+        #     user=self.cart.owner, cart=self.cart, product=product
+        # )
         if created:
             self.cart.products.add(cart_product)
-        recalc_cart(self.cart)
-        messages.add_message(request, messages.INFO, "Товар успешно добавлен")
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            executor.submit(recalc_cart, self.cart)
+            executor.submit(messages.add_message, [request, messages.INFO, "Товар успешно добавлен"])
+        #recalc_cart(self.cart)
+        #messages.add_message(request, messages.INFO, "Товар успешно добавлен")
         return HttpResponseRedirect('/cart/')
 
 
@@ -111,10 +133,19 @@ class DeleteFromCartView(CartMixin, View):
 
     def get(self, request, *args, **kwargs):
         product_slug = kwargs.get('slug')
-        product = Product.objects.get(slug=product_slug)
-        cart_product = CartProduct.objects.get(
-            user=self.cart.owner, cart=self.cart, product=product
-        )
+
+        product, cart_product = None, None
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            product_future = executor.submit(Product.objects.get, slug=product_slug)
+            cart_future = executor.submit(CartProduct.objects.get, user=self.cart.owner, cart=self.cart, product=product)
+
+            product = prod_future.result()
+            cart_future = cart_future.result()
+
+        # product = Product.objects.get(slug=product_slug)
+        # cart_product = CartProduct.objects.get(
+        #     user=self.cart.owner, cart=self.cart, product=product
+        # )
         self.cart.products.remove(cart_product)
         cart_product.delete()
         recalc_cart(self.cart)
@@ -126,15 +157,30 @@ class ChangeQTYView(CartMixin, View):
 
     def post(self, request, *args, **kwargs):
         product_slug = kwargs.get('slug')
-        product = Product.objects.get(slug=product_slug)
-        cart_product = CartProduct.objects.get(
-            user=self.cart.owner, cart=self.cart, product=product
-        )
+
+        product, cart_product = None, None
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            product_future = executor.submit(Product.objects.get, slug=product_slug)
+            cart_future = executor.submit(CartProduct.objects.get, user=self.cart.owner, cart=self.cart, product=product)
+
+            product = prod_future.result()
+            cart_future = cart_future.result()
+
+        # product = Product.objects.get(slug=product_slug)
+        # cart_product = CartProduct.objects.get(
+        #     user=self.cart.owner, cart=self.cart, product=product
+        # )
         qty = int(request.POST.get('qty'))
         cart_product.qty = qty
-        cart_product.save()
-        recalc_cart(self.cart)
-        messages.add_message(request, messages.INFO, "Кол-во успешно изменено")
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            executor.submit(cart_product.save())
+            executor.submit(recalc_cart, self.cart)
+            executor.submit(messages.add_message, [request, messages.INFO, "Кол-во успешно изменено"])
+
+        # cart_product.save()
+        # recalc_cart(self.cart)
+        # messages.add_message(request, messages.INFO, "Кол-во успешно изменено")
         return HttpResponseRedirect('/cart/')
 
 
@@ -190,6 +236,7 @@ class MakeOrderView(CartMixin, View):
 
 
 class LoginView(CartMixin, View):
+
 
     def get(self, request, *args, **kwargs):
         form = LoginForm(request.POST or None)
@@ -261,3 +308,4 @@ class RegistrationView(CartMixin, View):
             'cart': self.cart
         }
         return render(request, 'registration.html', context)
+
