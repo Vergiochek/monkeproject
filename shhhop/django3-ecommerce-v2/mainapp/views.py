@@ -120,8 +120,6 @@ class AddToCartView(CartMixin, View):
         with concurrent.futures.ThreadPoolExecutor() as executor:
             executor.submit(recalc_cart, self.cart)
             executor.submit(messages.add_message, [request, messages.INFO, "Товар успешно добавлен"])
-        #recalc_cart(self.cart)
-        #messages.add_message(request, messages.INFO, "Товар успешно добавлен")
         return HttpResponseRedirect('/cart/')
 
 
