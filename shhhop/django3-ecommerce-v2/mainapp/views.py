@@ -114,10 +114,6 @@ class AddToCartView(CartMixin, View):
             product = product_future.result()
             cart_product, created = prod_info.result()
 
-        # product = Product.objects.get(slug=product_slug)
-        # cart_product, created = CartProduct.objects.get_or_create(
-        #     user=self.cart.owner, cart=self.cart, product=product
-        # )
         if created:
             self.cart.products.add(cart_product)
 
@@ -142,10 +138,6 @@ class DeleteFromCartView(CartMixin, View):
             product = prod_future.result()
             cart_future = cart_future.result()
 
-        # product = Product.objects.get(slug=product_slug)
-        # cart_product = CartProduct.objects.get(
-        #     user=self.cart.owner, cart=self.cart, product=product
-        # )
         self.cart.products.remove(cart_product)
         cart_product.delete()
         recalc_cart(self.cart)
@@ -166,10 +158,6 @@ class ChangeQTYView(CartMixin, View):
             product = prod_future.result()
             cart_future = cart_future.result()
 
-        # product = Product.objects.get(slug=product_slug)
-        # cart_product = CartProduct.objects.get(
-        #     user=self.cart.owner, cart=self.cart, product=product
-        # )
         qty = int(request.POST.get('qty'))
         cart_product.qty = qty
 
@@ -178,9 +166,6 @@ class ChangeQTYView(CartMixin, View):
             executor.submit(recalc_cart, self.cart)
             executor.submit(messages.add_message, [request, messages.INFO, "Кол-во успешно изменено"])
 
-        # cart_product.save()
-        # recalc_cart(self.cart)
-        # messages.add_message(request, messages.INFO, "Кол-во успешно изменено")
         return HttpResponseRedirect('/cart/')
 
 
